@@ -189,9 +189,9 @@ function findNextCountry(countries, country) {
     var chosenLastCharacter = lastCharacterSet[Math.floor(Math.random() * lastCharacterSet.length)];
 
     // choose a candidate whose name ends with the chosen random character
-    for (var i = 0; i < countries.length; i++) {
-        if (countries[i].slice(-1) == chosenLastCharacter) {
-            return countries[i];
+    for (var i = 0; i < candidates.length; i++) {
+        if (candidates[i].slice(-1) == chosenLastCharacter) {
+            return candidates[i];
         }
     }
 
