@@ -69,7 +69,7 @@ var startStateHandlers = Alexa.CreateStateHandler(GAME_STATES.START, {
         var speechOutput = newGame ? this.t("NEW_GAME_MESSAGE", this.t("GAME_NAME")) + this.t("WELCOME_MESSAGE", GAME_LENGTH.toString()) : "";
                 
         var countries = populateCountries(this.t("COUNTRIES"));
-        var alexaCountry = countries[0];
+        var alexaCountry = findNextCountry(countries, "");
         countries = removeCountry(countries, alexaCountry);
         
         var repromptText = "Ping " + alexaCountry + ".";
@@ -165,11 +165,36 @@ var helpStateHandlers = Alexa.CreateStateHandler(GAME_STATES.HELP, {
 
 function findNextCountry(countries, country) {
 
-    for (var i=countries.length-1; i>=0; i--) {
-        if (doesCountryFollowRules(country, countries[i])) {
+    var candidates = [];
+    var lastCharacterSet = [];
+
+    // create a set of last letters of the candidates
+    // find the list of all countries that start with the last letter of 'country'
+    for (var i = 0; i < countries.length; i++) {
+        if (country == "" ? true : doesCountryFollowRules(country, countries[i])) {
+            candidates.push(countries[i]);
+            lastCharacter = countries[i].slice(-1);
+            if (lastCharacterSet.indexOf(lastCharacter) == -1) {
+                lastCharacterSet.push(lastCharacter);
+            }
+        }
+    }
+
+    // return empty string if no candidate exists
+    if (candidates.length == 0) {
+        return "";
+    }
+
+    // choose a random character from this set
+    var chosenLastCharacter = lastCharacterSet[Math.floor(Math.random() * lastCharacterSet.length)];
+
+    // choose a candidate whose name ends with the chosen random character
+    for (var i = 0; i < countries.length; i++) {
+        if (countries[i].slice(-1) == chosenLastCharacter) {
             return countries[i];
         }
     }
+
     return "";
 }
 
