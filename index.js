@@ -15,19 +15,21 @@ var languageString = {
         "translation": {
             "COUNTRIES" : Resources["CountriesDatabase"],
             "GAME_NAME" : "Nation Pong",
-            "HELP_MESSAGE": "I will ping with a country name. You will pong with a country name starting with the last letter of my country. We continue ping pong till you pong %s times. To start a new game at any time, say, start game.",
+            "HELP_MESSAGE": "I will ping with a country name. You will pong with a country name starting with the last letter of my country. You cannot repeat a country. We continue ping pong till you pong %s times. To start a new game at any time, say, start game.",
             "ASK_MESSAGE_START": "Would you like to start playing?",
             "STOP_MESSAGE": "Would you like to keep playing?",
             "CANCEL_MESSAGE": "Ok, let\'s play again soon.",
             "NO_MESSAGE": "Ok, we\'ll play another time. Goodbye!",
             "COUNTRY_UNHANDLED": "Try saying a valid country",
             "HELP_UNHANDLED": "Say yes to continue, or no to end the game.",
-            "START_UNHANDLED": "Say start to start a new game.",
-            "NEW_GAME_MESSAGE": "Welcome to %s. ",
-            "WELCOME_MESSAGE": "I will ping with a country name. You will pong with a country name starting with the last letter of my country. We continue ping pong till you pong %s times. Let\'s begin. ",
+            "START_UNHANDLED_MESSAGE": "Say start to start a new game or stop to exit.",
+            "NEW_GAME_MESSAGE": "Welcome to %s.",
+            "WELCOME_MESSAGE": "I will ping with a country name. You will pong with a country name starting with the last letter of my country. You cannot repeat a country. We continue ping pong till you pong %s times. Say stop at any time to surrender. Are you ready to begin?",
             "WRONG_COUNTRY_MESSAGE": "Wrong country.",
             "WON_GAME_MESSAGE": "You won.",
-            "END_GAME_MESSAGE": "Thank you for playing!"
+            "ALEXA_LOST_MESSAGE": "I do not know the next country. You won.",
+            "END_GAME_MESSAGE": "Thank you for playing!",
+            "ASK_ANOTHER_GAME_MESSAGE": "Do you wish to play another game?"
         }
     }
 };
@@ -65,25 +67,60 @@ var newSessionHandlers = {
 
 var startStateHandlers = Alexa.CreateStateHandler(GAME_STATES.START, {
     "StartGame": function (newGame) {
-        
-        var speechOutput = newGame ? this.t("NEW_GAME_MESSAGE", this.t("GAME_NAME")) + this.t("WELCOME_MESSAGE", GAME_LENGTH.toString()) : "";
-                
+        if (newGame) {
+            var speechOutput = this.t("NEW_GAME_MESSAGE", this.t("GAME_NAME")) + " " + this.t("WELCOME_MESSAGE", GAME_LENGTH.toString());
+            this.emit(":ask", speechOutput, speechOutput);
+        }
+        else {
+            var countries = populateCountries(this.t("COUNTRIES"));
+            var alexaCountry = findNextCountry(countries, "");
+            countries = removeCountry(countries, alexaCountry);
+
+            var speechOutput = this.t("NEW_GAME_MESSAGE", this.t("GAME_NAME")) + " " + "Ping " + alexaCountry + ".";
+
+            Object.assign(this.attributes, {
+                "country": alexaCountry,
+                "repromptText": speechOutput,
+                "countries": countries,
+                "score": 0
+            });
+
+            this.handler.state = GAME_STATES.PONG;
+            this.emit(":askWithCard", speechOutput, speechOutput, this.t("GAME_NAME"), alexaCountry);
+        }
+    },
+    "AMAZON.YesIntent": function () {
         var countries = populateCountries(this.t("COUNTRIES"));
         var alexaCountry = findNextCountry(countries, "");
         countries = removeCountry(countries, alexaCountry);
-        
-        var repromptText = "Ping " + alexaCountry + ".";
-        speechOutput += repromptText;
+
+        var speechOutput = "Ping " + alexaCountry + ".";
 
         Object.assign(this.attributes, {
             "country": alexaCountry,
-            "repromptText": repromptText,
+            "repromptText": speechOutput,
             "countries": countries,
             "score": 0
         });
 
         this.handler.state = GAME_STATES.PONG;
-        this.emit(":askWithCard", speechOutput, repromptText, this.t("GAME_NAME"), alexaCountry);
+        this.emit(":askWithCard", speechOutput, speechOutput, this.t("GAME_NAME"), alexaCountry);
+    },
+    "AMAZON.NoIntent": function () {
+        var speechOutput = this.t("END_GAME_MESSAGE");
+        this.emit(":tell", speechOutput, speechOutput);
+    },
+    "AMAZON.StopIntent": function () {
+        var speechOutput = this.t("END_GAME_MESSAGE");
+        this.emit(":tell", speechOutput, speechOutput);
+    },
+    "AMAZON.CancelIntent": function () {
+        var speechOutput = this.t("END_GAME_MESSAGE");
+        this.emit(":tell", speechOutput, speechOutput);
+    },
+    "Unhandled": function () {
+        var speechOutput = this.t("START_UNHANDLED_MESSAGE");
+        this.emit(":tell", speechOutput, speechOutput);
     }
 });
 
@@ -97,6 +134,14 @@ var pongStateHandlers = Alexa.CreateStateHandler(GAME_STATES.PONG, {
     },
     "AMAZON.RepeatIntent": function () {
         this.emit(":ask", this.attributes["repromptText"], this.attributes["repromptText"]);
+    },
+    "AMAZON.YesIntent": function () {
+        this.handler.state = GAME_STATES.START;
+        this.emitWithState("StartGame", false);
+    },
+    "AMAZON.NoIntent": function () {
+        var speechOutput = this.t("END_GAME_MESSAGE");
+        this.emit(":tell", speechOutput, speechOutput);
     },
     "AMAZON.HelpIntent": function () {
         this.handler.state = GAME_STATES.HELP;
@@ -120,7 +165,7 @@ var pongStateHandlers = Alexa.CreateStateHandler(GAME_STATES.PONG, {
 var helpStateHandlers = Alexa.CreateStateHandler(GAME_STATES.HELP, {
     "helpTheUser": function (newGame) {
         var askMessage = newGame ? this.t("ASK_MESSAGE_START") : this.t("STOP_MESSAGE");
-        var speechOutput = this.t("HELP_MESSAGE", GAME_LENGTH) + askMessage;
+        var speechOutput = this.t("HELP_MESSAGE", GAME_LENGTH) + " " + askMessage;
         this.emit(":ask", speechOutput, speechOutput);
     },
     "AMAZON.StartOverIntent": function () {
@@ -173,7 +218,7 @@ function findNextCountry(countries, country) {
     for (var i = 0; i < countries.length; i++) {
         if (country == "" ? true : doesCountryFollowRules(country, countries[i])) {
             candidates.push(countries[i]);
-            lastCharacter = countries[i].slice(-1);
+            var lastCharacter = countries[i].slice(-1);
             if (lastCharacterSet.indexOf(lastCharacter) == -1) {
                 lastCharacterSet.push(lastCharacter);
             }
@@ -231,8 +276,8 @@ function handleUserCountry(userGaveUp) {
             alexaCountry = "not available";
         }
 
-        speechOutput = "Next country could have been " + alexaCountry + " . " + this.t("END_GAME_MESSAGE");
-        this.emit(":tellWithCard", speechOutput, this.t("GAME_NAME"), alexaCountry);
+        speechOutput = "Next country could have been " + alexaCountry + ". " + "Your score is " + this.attributes["score"] + ". " + this.t("ASK_ANOTHER_GAME_MESSAGE");
+        this.emit(":askWithCard", speechOutput, this.t("GAME_NAME"), alexaCountry);
     }
     else {
 
@@ -243,10 +288,10 @@ function handleUserCountry(userGaveUp) {
             countries = removeCountry(countries, userCountry);
             
             currentScore++;
-            if(currentScore == GAME_LENGTH) {
+            if(currentScore >= GAME_LENGTH) {
                 
-                speechOutput = this.t("WON_GAME_MESSAGE") + this.t("END_GAME_MESSAGE");
-                this.emit(":tell", speechOutput, speechOutput);
+                speechOutput = this.t("WON_GAME_MESSAGE") + " " + this.t("ASK_ANOTHER_GAME_MESSAGE");
+                this.emit(":ask", speechOutput, speechOutput);
             }
             else {
                 alexaCountry = findNextCountry(countries, userCountry);                
@@ -266,8 +311,8 @@ function handleUserCountry(userGaveUp) {
                     this.emit(":askWithCard", speechOutput, repromptText, this.t("GAME_NAME"), alexaCountry);
                 }
                 else {
-                    speechOutput = this.t("WON_GAME_MESSAGE") + this.t("END_GAME_MESSAGE");
-                    this.emit(":tell", speechOutput, speechOutput);
+                    speechOutput = this.t("ALEXA_LOST_MESSAGE") + " " + this.t("ASK_ANOTHER_GAME_MESSAGE");
+                    this.emit(":ask", speechOutput, speechOutput);
                 }
             }
         }
