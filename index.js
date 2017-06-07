@@ -206,7 +206,7 @@ function handleUserCountry(userGaveUp) {
             alexaCountry = "not available";
         }
 
-        speechOutput = "Next country was " + alexaCountry + " . " + this.t("END_GAME_MESSAGE");
+        speechOutput = "Next country could have been " + alexaCountry + " . " + this.t("END_GAME_MESSAGE");
         this.emit(":tellWithCard", speechOutput, this.t("GAME_NAME"), alexaCountry);
     }
     else {
