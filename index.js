@@ -7,6 +7,7 @@ var GAME_STATES = {
     START: "_STARTMODE", // Entry point, start the game.
     HELP: "_HELPMODE" // The user is asking for help.
 };
+
 var Resources = require("./countries");
 
 var languageString = {
